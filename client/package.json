@@ -1,0 +1,39 @@
+{
+  "name": "client",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "frontend for commentator bot",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ezou626/cis5810finalproject.git"
+  },
+  "keywords": [
+    "ai",
+    "node.js",
+    "react",
+    "tailwindcss",
+    "vite"
+  ],
+  "author": "eric, avaniko, david",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ezou626/cis5810finalproject/issues"
+  },
+  "homepage": "https://github.com/ezou626/cis5810finalproject#readme",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "vite": "^6.0.1"
+  }
+}
