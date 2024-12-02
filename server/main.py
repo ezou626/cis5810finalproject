@@ -39,7 +39,7 @@ async def play_video(url: str):
 
     return StreamingResponse(iterfile(), media_type="video/mp4")
 
-ANALYSIS_WINDOW = 10 # seconds
+ANALYSIS_WINDOW = 2 # seconds
 CAPTION_GRANULARITY = 1
 
 @app.get('/captions')
@@ -62,7 +62,7 @@ async def get_captions(video_url: str):
                     # caption the images
                     img_end = time.time()
                     print(f"Time taken to get images: {img_end - start}", file=sys.stderr)
-                    text, _ = caption_images(raw_images)
+                    text, _ = await caption_images(raw_images)
                     raw_images = []
                     times_sent += 1
                     end = time.time()
@@ -89,7 +89,7 @@ async def get_captions():
                     
     return StreamingResponse(caption_stream(), media_type="text/event-stream")
 
-loop = new_event_loop()
-config = Config(app=app)
-server = Server(config=config)
-loop.run_until_complete(server.serve())
+# loop = new_event_loop()
+# config = Config(app=app)
+# server = Server(config=config)
+# loop.run_until_complete(server.serve())

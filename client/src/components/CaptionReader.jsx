@@ -37,7 +37,7 @@ const CaptionReader = ({ videoUrl }) => {
 
   return (
     <div className="flex flex-col items-center p-4 space-y-6">
-      <h1 className="text-xl font-semibold text-gray-900">Server-Sent Event Stream</h1>
+      {/* <h1 className="text-xl font-semibold text-gray-900">Server-Sent Event Stream</h1> */}
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 

@@ -1,45 +1,14 @@
-import React, { useState } from "react";
+import React from "react";
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL;
-
-const VideoStreamer = () => {
-  const [videoUrl, setVideoUrl] = useState("");
-  const [streamUrl, setStreamUrl] = useState("");
-  const [error, setError] = useState("");
-
-  const startStreaming = () => {
-    if (!videoUrl.trim()) {
-      setError("Please provide a valid video URL.");
-      return;
-    }
-    setError("");
-    setStreamUrl(`${backendUrl}/play_video?url=${encodeURIComponent(videoUrl)}`);
-  };
-
-  const stopStreaming = () => {
-    setStreamUrl("");
-  };
-
+const VideoStreamer = ({ streamUrl, startStreaming, stopStreaming }) => {
   return (
-    <div className="flex flex-col items-center p-4 space-y-6">
+    <div className="flex flex-col items-center w-full md:w-2/3 bg-white rounded-lg shadow-lg p-6">
+      <h2 className="text-xl font-semibold text-gray-800 mb-4">Video Stream</h2>
 
-      <div className="w-full max-w-md">
-        <label className="block text-sm font-medium text-gray-700">
-          Video URL
-        </label>
-        <input
-          type="text"
-          value={videoUrl}
-          onChange={(e) => setVideoUrl(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          placeholder="Enter an MP4 video URL"
-        />
-      </div>
-
-      <div className="flex space-x-4">
+      <div className="flex space-x-4 mb-4">
         <button
           onClick={startStreaming}
-          className={`px-4 py-2 rounded-md text-white ${
+          className={`px-6 py-2 rounded-lg text-white font-semibold transition ${
             streamUrl
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-indigo-500 hover:bg-indigo-600"
@@ -50,7 +19,7 @@ const VideoStreamer = () => {
         </button>
         <button
           onClick={stopStreaming}
-          className={`px-4 py-2 rounded-md text-white ${
+          className={`px-6 py-2 rounded-lg text-white font-semibold transition ${
             !streamUrl
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-red-500 hover:bg-red-600"
@@ -61,15 +30,13 @@ const VideoStreamer = () => {
         </button>
       </div>
 
-      {error && <p className="text-red-500 text-sm">{error}</p>}
-
-      <div className="w-full max-w-3xl mt-8">
+      <div className="w-full">
         {streamUrl ? (
           <video
             src={streamUrl}
             controls
             autoPlay
-            className="w-full aspect-video bg-black"
+            className="w-full rounded-lg bg-black shadow-md"
           />
         ) : (
           <p className="text-gray-500">No live stream is currently active.</p>
