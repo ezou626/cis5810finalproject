@@ -3,8 +3,10 @@ import os
 import numpy as np
 import asyncio
 from dotenv import load_dotenv
+import sys
 
 load_dotenv('./server/.env', override=True)
+READ_LIMIT = 2**18
 
 #test_stream: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
 
@@ -35,7 +37,6 @@ async def frame_generator(video_url: str):
         np.ndarray: a numpy image in BGR format
     """
     _, width, height = get_video_metadata(video_url)
-
     # start ffmpeg
     command = [
         os.environ.get('FFMPEG_PATH'),
@@ -48,19 +49,37 @@ async def frame_generator(video_url: str):
     ]
     ffmpeg_process = await asyncio.create_subprocess_exec(
         *command, 
-        stdout=asyncio.subprocess.PIPE
+        stderr=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        limit=READ_LIMIT
     )
+
+    frame_size = width * height * 3
+    buffer = b''
     try:
         while True:
-            raw_frame = await ffmpeg_process.stdout.read(width * height * 3)
-            if len(raw_frame) != (width * height * 3):
-                # End of stream or error occurred
-                break
-            yield np.frombuffer(raw_frame, np.uint8).reshape((height, width, 3))
-        return
+            chunk = await ffmpeg_process.stdout.read(READ_LIMIT)  # Read in chunks
+            if not chunk:
+                break  # End of stream
+
+            buffer += chunk  # Add chunk to buffer
+
+            # If enough data has been accumulated for a full frame
+            while len(buffer) >= frame_size:
+                frame = buffer[:frame_size]  # Take the first complete frame
+                buffer = buffer[frame_size:]  # Keep the remaining data
+
+                # Convert the frame to a numpy array (BGR format)
+                yield np.frombuffer(frame, np.uint8).reshape((height, width, 3))
+
     except Exception as e:
-        print(e)
+        print(f"Error during frame extraction: {e}", file=sys.stderr)
     finally:
+        # Log stderr output from ffmpeg for any errors or warnings
+        stderr_output = await ffmpeg_process.stderr.read()
+        if stderr_output:
+            print(f"FFMPEG STDERR: {stderr_output.decode()}", file=sys.stderr)
+
         ffmpeg_process.terminate()
-        ffmpeg_process.wait()
-        return
+        await ffmpeg_process.wait()
+        print("FFMPEG process terminated.", file=sys.stderr)
