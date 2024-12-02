@@ -13,7 +13,7 @@ const VideoStreamer = () => {
       return;
     }
     setError("");
-    setStreamUrl(`${backendUrl}/video?url=${encodeURIComponent(videoUrl)}`);
+    setStreamUrl(`${backendUrl}/play_video?url=${encodeURIComponent(videoUrl)}`);
   };
 
   const stopStreaming = () => {
