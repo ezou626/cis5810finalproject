@@ -79,7 +79,8 @@ async def play_video_mod(url: str):
                 start = time.time()
                 frame = cv2.resize(frame, (width, height))
                 _, frame = cv2.imencode('.jpeg', frame)
-                yield (b'--frame\r\n'b'Content-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
+                yield (b'--frame\r\n'b'Content-Type: image/jpeg\r\n\r\n'
+                        + frame.tobytes() + b'\r\n')
                 end = time.time()
                 await asyncio.sleep(max(0, 1/framerate - (end - start)))
         except Exception as e:
