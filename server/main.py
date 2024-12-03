@@ -5,12 +5,11 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-from transformers import BlipProcessor, BlipForConditionalGeneration
 import sys, time
 import os
+import cv2
 from dotenv import load_dotenv
-from commentary import caption_images_with_blip, extract_frames, batch_frames, get_caption_for_batch
-from frame_extractor import get_video_metadata
+from commentary import extract_frames, batch_frames, get_caption_for_batch
 import google.generativeai as genai
 
 # Load environment variables
@@ -29,9 +28,22 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Load BLIP model and processor
-processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+def get_video_metadata(video_url: str) -> tuple[int, int, int]:
+    """Get video metadata from a given URL
+
+    Args:
+        video_url (str): a URL to a video stream
+
+    Returns:
+        tuple[int, int, int]: a tuple containing the framerate, width, and height of the video stream
+    """
+    cap = cv2.VideoCapture(video_url)
+    framerate = round(cap.get(5))
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+
+    return framerate, width, height
 
 @app.get("/")
 async def root():
