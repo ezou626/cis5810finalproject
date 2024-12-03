@@ -15,7 +15,7 @@ export default function App() {
       return;
     }
     setError("");
-    setStreamUrl(`${backendUrl}/play_video?url=${encodeURIComponent(videoUrl)}`);
+    setStreamUrl(videoUrl);
   };
 
   const stopStreaming = () => {
@@ -24,7 +24,7 @@ export default function App() {
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center py-10 space-y-8">
-      <h1 className="text-3xl font-bold text-indigo-600">Live Video Streamer</h1>
+      <h1 className="text-3xl font-bold text-indigo-600">Auto-Commentator</h1>
 
       <div className="w-full max-w-lg">
         <label
@@ -54,7 +54,7 @@ export default function App() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Captions (Auto-generated)</h1>
           {streamUrl && <CaptionReader videoUrl={videoUrl} />}
-          {!streamUrl && <p className="py-4 justify-center">No stream runnign currently</p>}
+          {!streamUrl && <p className="py-4 justify-center">No stream running currently</p>}
         </div>
         
       </div>
