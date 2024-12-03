@@ -1,5 +1,6 @@
 import asyncio
 from asyncio import new_event_loop
+import base64
 from uvicorn import Server, Config
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
@@ -15,7 +16,6 @@ import google.generativeai as genai
 # Load environment variables
 load_dotenv('.env', override=True)
 genai.configure(api_key=os.environ.get('G_API_KEY'))
-print(os.environ.get('MACHINE_TYPE', 'not'), file=sys.stderr)
 
 app = FastAPI()
 
@@ -61,6 +61,32 @@ async def play_video(url: str):
                     yield chunk
 
     return StreamingResponse(iterfile(), media_type="video/mp4")
+
+@app.get('/play_video_mod')
+async def play_video_mod(url: str):
+    """
+    Streams video content from a given URL, resizing and cropping frames to the specified dimensions.
+    """
+    async def process_video():
+        framerate, width, height = get_video_metadata(url)
+        if height > 480:
+            scale = 480 / height
+            width = int(width * scale)
+            height = int(height * scale)
+        try:
+            frames = extract_frames(url)
+            for frame in frames:
+                start = time.time()
+                frame = cv2.resize(frame, (width, height))
+                _, frame = cv2.imencode('.jpeg', frame)
+                yield (b'--frame\r\n'b'Content-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
+                end = time.time()
+                await asyncio.sleep(max(0, 1/framerate - (end - start)))
+        except Exception as e:
+            print(e, file=sys.stderr)
+
+    # Stream transformed video frames as a video file
+    return StreamingResponse(process_video(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 ANALYSIS_WINDOW = 10  # seconds
 
