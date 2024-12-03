@@ -2,12 +2,12 @@ import React, { useState } from "react";
 import CaptionReader from "./components/CaptionReader";
 import VideoStreamer from "./components/VideoStreamer";
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL;
-
 export default function App() {
   const [videoUrl, setVideoUrl] = useState("");
-  const [streamUrl, setStreamUrl] = useState("");
+  const [isStreaming, setIsStreaming] = useState("");
   const [error, setError] = useState("");
+
+  const streamUrl = isStreaming ? videoUrl : "";
 
   const startStreaming = () => {
     if (!videoUrl.trim()) {
@@ -15,11 +15,11 @@ export default function App() {
       return;
     }
     setError("");
-    setStreamUrl(videoUrl);
+    setIsStreaming(true);
   };
 
   const stopStreaming = () => {
-    setStreamUrl("");
+    setIsStreaming(false);
   };
 
   return (
@@ -45,17 +45,38 @@ export default function App() {
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
+      <div className="flex space-x-4 mb-4">
+        <button
+          onClick={startStreaming}
+          className={`px-6 py-2 rounded-lg text-white font-semibold transition ${
+            
+              streamUrl ? "bg-gray-400 cursor-not-allowed"
+              : "bg-indigo-500 hover:bg-indigo-600"
+          }`}
+          disabled={!!streamUrl}
+        >
+          Start Streaming
+        </button>
+        <button
+          onClick={stopStreaming}
+          className={`px-6 py-2 rounded-lg text-white font-semibold transition ${
+            !streamUrl
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-500 hover:bg-red-600"
+          }`}
+          disabled={!streamUrl}
+        >
+          Stop Streaming
+        </button>
+      </div>
+
       <div className="w-full max-w-5xl flex flex-col md:flex-row gap-8">
         <VideoStreamer
           streamUrl={streamUrl}
           startStreaming={startStreaming}
           stopStreaming={stopStreaming}
         />
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Captions (Auto-generated)</h1>
-          {streamUrl && <CaptionReader videoUrl={videoUrl} />}
-          {!streamUrl && <p className="py-4 justify-center">No stream running currently</p>}
-        </div>
+        <CaptionReader streamUrl={streamUrl} />
         
       </div>
     </main>

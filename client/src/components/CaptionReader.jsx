@@ -2,14 +2,14 @@ import React, { useEffect, useState } from "react";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
-const CaptionReader = ({ videoUrl }) => {
+const CaptionReader = ({ streamUrl }) => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     // Handle SSE connection
     const eventSource = new EventSource(
-      `${backendUrl}/captions?video_url=${encodeURIComponent(videoUrl)}`);
+      `${backendUrl}/captions?video_url=${encodeURIComponent(streamUrl)}`);
     // const eventSource = new EventSource(
     //   `${backendUrl}/captions_debug`);
 
@@ -36,19 +36,21 @@ const CaptionReader = ({ videoUrl }) => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center p-4 space-y-6">
-      {/* <h1 className="text-xl font-semibold text-gray-900">Server-Sent Event Stream</h1> */}
-
+    <div className="flex flex-col items-center w-1/2 md:w-1/4 bg-white rounded-lg shadow-lg p-6 space-y-6">
+      {streamUrl ? <>
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      <div className="w-full max-w-md">
-        <h2 className="text-lg font-medium text-gray-700">Last Message:</h2>
+      <div className="w-full w-md">
+        <h2 className="text-lg font-medium text-gray-700 w-md">Last Message:</h2>
         <ul className="mt-4 space-y-2">
-          {message.length > 0 ? <p className="text-gray-500">{message}</p> : (
+          {message.length > 0 ? <p className="text-gray-500 w-md">{message}</p> : (
             <p className="text-gray-500">Waiting for new messages...</p>
           )}
         </ul>
-      </div>
+      </div></> : (
+        <p className="text-gray-500">No live stream is currently active.</p>
+      )
+      }
     </div>
   );
 };
