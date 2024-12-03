@@ -1,19 +1,22 @@
 import asyncio
+from asyncio import new_event_loop
+from uvicorn import Server, Config
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from transformers import BlipProcessor, BlipForConditionalGeneration
-from PIL import Image
-import numpy as np
-import cv2
-import sys
+import sys, time
 import os
-import time
 from dotenv import load_dotenv
+from commentary import caption_images_with_blip, extract_frames, batch_frames, get_caption_for_batch
+from frame_extractor import get_video_metadata
+import google.generativeai as genai
 
 # Load environment variables
-load_dotenv('./.env', override=True)
+load_dotenv('.env', override=True)
+genai.configure(api_key=os.environ.get('G_API_KEY'))
+print(os.environ.get('MACHINE_TYPE', 'not'), file=sys.stderr)
 
 app = FastAPI()
 
@@ -47,100 +50,36 @@ async def play_video(url: str):
 
     return StreamingResponse(iterfile(), media_type="video/mp4")
 
-# ANALYSIS_WINDOW = 60  # seconds
-# CAPTION_GRANULARITY = 10
-
-def extract_frames(video_url: str):
-    """
-    Extracts frames from a video URL or file path.
-    """
-    video_capture = cv2.VideoCapture(video_url)
-    success, frame = video_capture.read()
-    while success:
-        yield frame
-        success, frame = video_capture.read()
-    video_capture.release()
-
-def batch_frames(frames, batch_size):
-    """
-    Groups frames into batches of a specified size.
-    """
-    batch = []
-    for frame in frames:
-        batch.append(frame)
-        if len(batch) == batch_size:
-            yield batch
-            batch = []
-    if batch:
-        yield batch
-
-def generate_caption_with_blip(image: np.ndarray) -> str:
-    """
-    Generate a caption for a single image using BLIP.
-
-    Args:
-        image (np.ndarray): The image as a NumPy array.
-
-    Returns:
-        str: The generated caption.
-    """
-    # Convert NumPy image to PIL format
-    image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
-    # Preprocess the image and generate the caption
-    inputs = processor(images=image_pil, return_tensors="pt")
-    outputs = model.generate(**inputs)
-
-    # Decode and return the caption
-    return processor.decode(outputs[0], skip_special_tokens=True)
-
-async def caption_images_with_blip(images: list[np.ndarray]) -> list[str]:
-    """
-    Generate captions for a batch of images using BLIP.
-
-    Args:
-        images (list[np.ndarray]): A list of images as NumPy arrays.
-
-    Returns:
-        list[str]: A list of generated captions.
-    """
-    captions = []
-    for image in images:
-        caption = generate_caption_with_blip(image)
-        captions.append(caption)
-    return captions
+ANALYSIS_WINDOW = 10  # seconds
 
 @app.get('/captions')
 async def get_captions(video_url: str):
     """
     Extracts frames from a video, processes them in batches, and generates captions using BLIP.
     """
+    framerate, width, height = get_video_metadata(video_url)
+    if width * height > 480*480:
+        scale = (480*480) / (width * height)
+        width = int(width * scale)
+        height = int(height * scale)
     async def caption_stream():
         try:
             frames = extract_frames(video_url)  # Extract frames from the video
-            for frame_batch in batch_frames(frames, batch_size=5):  # Batch the frames
-                captions = await caption_images_with_blip(frame_batch)  # Generate captions
-                for caption in captions:
-                    yield f"data: {caption}\n\n"  # Stream captions
-                    await asyncio.sleep(1)  # Control the streaming rate
+            for frame_batch in batch_frames(frames, batch_size=ANALYSIS_WINDOW, framerate=framerate):  # Batch the frames
+                start = time.time()
+                caption = await get_caption_for_batch(frame_batch, width, height)
+                end = time.time()
+                yield f"data: {caption}\n\n"
+                # consistent timing
+                await asyncio.sleep(max(0, ANALYSIS_WINDOW - (end - start)))
         except Exception as e:
             print(e, file=sys.stderr)
             yield f"data: Error: {str(e)}\n\n"
 
     return StreamingResponse(caption_stream(), media_type="text/event-stream")
 
-@app.get('/captions_debug')
-async def get_captions_debug():
-    """
-    Debug endpoint to simulate captions stream for testing purposes.
-    """
-    index = 0
-
-    async def caption_stream():
-        nonlocal index
-        while True:
-            await asyncio.sleep(1)
-            index += 1
-            yield f"data: Debug Message {index}\n\n"
-
-    return StreamingResponse(caption_stream(), media_type="text/event-stream")
+if os.environ.get('MACHINE_TYPE', 'not') == 'windows':
+    loop = new_event_loop()
+    config = Config(app=app)
+    server = Server(config)
+    loop.run_until_complete(server.serve())
