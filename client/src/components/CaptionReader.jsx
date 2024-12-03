@@ -20,7 +20,7 @@ const CaptionReader = ({ videoUrl }) => {
     eventSource.onmessage = (event) => {
       const newMessage = event.data;
       console.log(newMessage);
-      setMessage(newMessage);
+      setMessage((prevMessage) =>newMessage);
     };
 
     eventSource.onerror = (event) => {

@@ -52,8 +52,9 @@ export default function App() {
           stopStreaming={stopStreaming}
         />
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Server-Sent Event Stream</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Captions (Auto-generated)</h1>
           {streamUrl && <CaptionReader videoUrl={videoUrl} />}
+          {!streamUrl && <p className="py-4 justify-center">No stream runnign currently</p>}
         </div>
         
       </div>
