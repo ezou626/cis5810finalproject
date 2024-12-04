@@ -1,16 +1,19 @@
 import React from "react";
 
 const VideoStreamer = ({ streamUrl }) => {
+  const modifiedStreamUrl = streamUrl
+    ? `http://localhost:8000/play_video_mod?url=${encodeURIComponent(streamUrl)}`
+    : null;
+
   return (
     <div className="flex flex-col items-center w-full md:w-2/3 bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-xl font-semibold text-gray-800 mb-4">Video Stream</h2>
 
       <div className="w-full">
-        {streamUrl ? (
-          <video
-            src={streamUrl}
-            controls
-            autoPlay
+        {modifiedStreamUrl ? (
+          <img
+            src={modifiedStreamUrl}
+            alt="Processed Stream"
             className="w-full rounded-lg bg-black shadow-md"
           />
         ) : (
