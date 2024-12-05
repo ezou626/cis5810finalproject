@@ -1,24 +1,18 @@
 import asyncio
-from asyncio import new_event_loop
-import base64
 import io
+import time
 from uvicorn import Server, Config
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
-import sys, time
 import os
 import cv2
-from dotenv import load_dotenv
-from typing import List, Dict
 import numpy as np
-import tensorflow as tf
-import tensorflow_hub as hub
+from dotenv import load_dotenv
+from ultralytics import YOLO
+from pydantic import BaseModel
 from commentary import extract_frames, batch_frames, get_caption_for_batch
 import google.generativeai as genai
-from pydantic import BaseModel
-
 
 # Load environment variables
 load_dotenv('.env', override=True)
@@ -38,30 +32,21 @@ app.add_middleware(
 
 # Global variables
 user_selected_box = None  # Store the user-defined bounding box
-detection_model = None  # YOLO model placeholder
+yolo_model = None  # YOLO model placeholder
 
-# Load TensorFlow Hub model
+# Load YOLO model
 def load_model():
-    global detection_model
+    global yolo_model
     try:
-        detection_model = hub.load("https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2")
+        yolo_model = YOLO("yolov5s.pt")  # Load pre-trained YOLOv5 model
         print("YOLO model loaded successfully!")
     except Exception as e:
         print(f"Error loading YOLO model: {e}")
-        detection_model = None
+        yolo_model = None
 
 @app.on_event("startup")
 def startup_event():
     load_model()
-
-def get_video_metadata(video_url: str) -> tuple[int, int, int]:
-    """Get video metadata from a given URL."""
-    cap = cv2.VideoCapture(video_url)
-    framerate = round(cap.get(cv2.CAP_PROP_FPS))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    cap.release()
-    return framerate, width, height
 
 @app.get("/")
 async def root():
@@ -77,7 +62,7 @@ class BoundingBox(BaseModel):
 def set_tracking_box(box: BoundingBox):
     """Set the bounding box to track."""
     global user_selected_box
-    user_selected_box = box.dict()  # Convert Pydantic model to dictionary
+    user_selected_box = box.dict()
     return {"message": "Tracking box set successfully"}
 
 @app.get('/get_first_frame')
@@ -89,66 +74,18 @@ async def get_first_frame(url: str):
         cap.release()
 
         if not ret or frame is None:
-            return {"error": "Unable to read the first frame. Check the video URL."}
+            raise HTTPException(status_code=400, detail="Unable to read the first frame. Check the video URL.")
 
         _, buffer = cv2.imencode('.jpeg', frame)
         return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
     except Exception as e:
-        print(f"Error extracting first frame: {e}", file=sys.stderr)
-        return {"error": str(e)}
-
-def detect_objects(frame):
-    """Run YOLO detection on a frame and return object bounding boxes."""
-    input_tensor = tf.convert_to_tensor(frame)
-    input_tensor = input_tensor[tf.newaxis, ...]
-    detections = detection_model(input_tensor)
-
-    # Extract bounding box, class, and confidence score
-    boxes = detections["detection_boxes"][0].numpy()
-    classes = detections["detection_classes"][0].numpy().astype(int)
-    scores = detections["detection_scores"][0].numpy()
-
-    # Filter by confidence threshold
-    threshold = 0.5
-    results = []
-    for box, cls, score in zip(boxes, classes, scores):
-        if score >= threshold:
-            ymin, xmin, ymax, xmax = box
-            results.append({
-                "box": (xmin, ymin, xmax, ymax),  # Normalized coordinates
-                "class": cls,
-                "score": score
-            })
-    return results
-
-def detect_objects_within_box(frame, user_box, detections):
-    """Filter YOLO detections to focus on the user-defined bounding box."""
-    x1, y1, x2, y2 = user_box
-    filtered_detections = []
-
-    frame_height, frame_width = frame.shape[:2]
-    x1, y1, x2, y2 = (
-        int(x1 * frame_width), int(y1 * frame_height),
-        int(x2 * frame_width), int(y2 * frame_height)
-    )
-
-    for detection in detections:
-        obj_x1, obj_y1, obj_x2, obj_y2 = detection["box"]
-
-        # Convert normalized coordinates to pixel values
-        obj_x1, obj_x2 = int(obj_x1 * frame_width), int(obj_x2 * frame_width)
-        obj_y1, obj_y2 = int(obj_y1 * frame_height), int(obj_y2 * frame_height)
-
-        # Check if the object's bounding box intersects with the user-defined box
-        if not (obj_x2 < x1 or obj_x1 > x2 or obj_y2 < y1 or obj_y1 > y2):
-            filtered_detections.append(detection)
-
-    return filtered_detections
+        print(f"Error extracting first frame: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get('/play_video_mod')
 async def play_video_mod(url: str):
     """
-    Streams video content from a given URL with object detection and auto-zoom.
+    Streams video content from a given URL with YOLO object detection and auto-zoom.
     Maintains aspect ratio and frame size.
     """
     async def process_video():
@@ -163,48 +100,28 @@ async def play_video_mod(url: str):
                 if not ret:
                     break
 
-                # Run object detection
-                detections = detect_objects(frame)
+                # Run YOLO detection
+                results = yolo_model(frame)
+
+                # Parse detections
+                detections = []
+                for r in results[0].boxes:
+                    box = r.xyxy.numpy().tolist()[0]  # Bounding box in [x1, y1, x2, y2]
+                    conf = r.conf.item()  # Confidence score
+                    cls = r.cls.item()  # Class ID
+                    if conf > 0.5 and cls == 0:  # Only include high-confidence "person" detections
+                        detections.append({"box": box, "conf": conf, "class": cls})
+
                 if detections:
                     # Select the largest object for zooming
-                    largest_detection = max(detections, key=lambda d: d["box"][2] * d["box"][3])
-                    box = largest_detection["box"]
-
-                    # Convert box coordinates to pixel values
-                    ymin, xmin, ymax, xmax = box
-                    (x1, y1, x2, y2) = (int(xmin * width), int(ymin * height), int(xmax * width), int(ymax * height))
+                    largest_detection = max(detections, key=lambda d: (d["box"][2] - d["box"][0]) * (d["box"][3] - d["box"][1]))
+                    x1, y1, x2, y2 = map(int, largest_detection["box"])
 
                     # Crop the frame to the area of interest
                     cropped_frame = frame[y1:y2, x1:x2]
 
-                    # Calculate the aspect ratio of the cropped frame
-                    cropped_height, cropped_width = cropped_frame.shape[:2]
-                    original_aspect_ratio = width / height
-                    cropped_aspect_ratio = cropped_width / cropped_height
-
-                    # Adjust the crop to maintain the original aspect ratio
-                    if cropped_aspect_ratio > original_aspect_ratio:
-                        # Wider than original aspect ratio: adjust height
-                        new_height = int(cropped_width / original_aspect_ratio)
-                        delta_height = (new_height - cropped_height) // 2
-                        y1 = max(0, y1 - delta_height)
-                        y2 = min(height, y2 + delta_height)
-                    elif cropped_aspect_ratio < original_aspect_ratio:
-                        # Taller than original aspect ratio: adjust width
-                        new_width = int(cropped_height * original_aspect_ratio)
-                        delta_width = (new_width - cropped_width) // 2
-                        x1 = max(0, x1 - delta_width)
-                        x2 = min(width, x2 + delta_width)
-
-                    # Ensure the adjusted crop is within frame bounds
-                    y1, y2 = max(0, y1), min(height, y2)
-                    x1, x2 = max(0, x1), min(width, x2)
-
-                    # Final cropped frame
-                    zoomed_frame = frame[y1:y2, x1:x2]
-
                     # Resize the cropped frame to the original dimensions
-                    zoomed_frame = cv2.resize(zoomed_frame, (width, height))
+                    zoomed_frame = cv2.resize(cropped_frame, (width, height))
 
                     # Encode and yield the frame
                     _, buffer = cv2.imencode('.jpeg', zoomed_frame)
@@ -221,8 +138,7 @@ async def play_video_mod(url: str):
                 await asyncio.sleep(1 / framerate)
 
         except Exception as e:
-            print(f"Error during video processing: {e}", file=sys.stderr)
-
+            print(f"Error during video processing: {e}")
         finally:
             cap.release()
 
@@ -249,13 +165,22 @@ async def get_captions(video_url: str):
                 yield f"data: {caption}\n\n"
                 await asyncio.sleep(max(0, ANALYSIS_WINDOW - (end - start)))
         except Exception as e:
-            print(f"Error during caption generation: {e}", file=sys.stderr)
+            print(f"Error during caption generation: {e}")
             yield f"data: Error: {str(e)}\n\n"
 
     return StreamingResponse(caption_stream(), media_type="text/event-stream")
 
+def get_video_metadata(video_url: str) -> tuple[int, int, int]:
+    """Get video metadata from a given URL."""
+    cap = cv2.VideoCapture(video_url)
+    framerate = round(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+    return framerate, width, height
+
 if os.environ.get('MACHINE_TYPE', 'not') == 'windows':
-    loop = new_event_loop()
+    loop = asyncio.new_event_loop()
     config = Config(app=app)
     server = Server(config)
     loop.run_until_complete(server.serve())
