@@ -111,17 +111,53 @@ async def play_video_mod(url: str):
                     cls = r.cls.item()  # Class ID
                     if conf > 0.5 and cls == 0:  # Only include high-confidence "person" detections
                         detections.append({"box": box, "conf": conf, "class": cls})
-
+                ################################################################################################
+                #MATH IS HERE
+                ################################################################################################
                 if detections:
                     # Select the largest object for zooming
                     largest_detection = max(detections, key=lambda d: (d["box"][2] - d["box"][0]) * (d["box"][3] - d["box"][1]))
                     x1, y1, x2, y2 = map(int, largest_detection["box"])
 
-                    # Crop the frame to the area of interest
-                    cropped_frame = frame[y1:y2, x1:x2]
+                    # Calculate the bounding box dimensions
+                    box_width = x2 - x1
+                    box_height = y2 - y1
+                    original_aspect_ratio = width / height
 
-                    # Resize the cropped frame to the original dimensions
-                    zoomed_frame = cv2.resize(cropped_frame, (width, height))
+                    # Determine the size of the sliding frame (scaled as large as possible)
+                    if box_width / box_height > original_aspect_ratio:
+                        # Wider than original aspect ratio: fit width
+                        frame_width = box_width
+                        frame_height = int(box_width / original_aspect_ratio)
+                    else:
+                        # Taller than original aspect ratio: fit height
+                        frame_height = box_height
+                        frame_width = int(box_height * original_aspect_ratio)
+
+                    # Ensure the frame fits within the image bounds
+                    frame_width = min(frame_width, width)
+                    frame_height = min(frame_height, height)
+
+                    # Center the frame on the bounding box
+                    center_x = x1 + box_width // 2
+                    center_y = y1 + box_height // 2
+                    frame_x1 = max(0, center_x - frame_width // 2)
+                    frame_y1 = max(0, center_y - frame_height // 2)
+                    frame_x2 = min(width, frame_x1 + frame_width)
+                    frame_y2 = min(height, frame_y1 + frame_height)
+
+                    # Ensure the frame remains within bounds
+                    frame_x1 = max(0, frame_x2 - frame_width)
+                    frame_y1 = max(0, frame_y2 - frame_height)
+
+                    # Extract the content within the frame
+                    sliding_frame = frame[frame_y1:frame_y2, frame_x1:frame_x2]
+
+                    # Resize the sliding frame to the screen size
+                    zoomed_frame = cv2.resize(sliding_frame, (width, height))
+
+                ################################################################################################################################
+                ################################################################################################################################
 
                     # Encode and yield the frame
                     _, buffer = cv2.imencode('.jpeg', zoomed_frame)
