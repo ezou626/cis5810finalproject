@@ -26,7 +26,7 @@ const CaptionReader = ({ streamUrl }) => {
     };
 
     eventSource.onerror = (event) => {
-      setError("Error connecting to the stream.");
+      setError("");
       console.log(event);
       eventSource.close();
     };

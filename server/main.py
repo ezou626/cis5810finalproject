@@ -220,3 +220,15 @@ if os.environ.get('MACHINE_TYPE', 'not') == 'windows':
     config = Config(app=app)
     server = Server(config)
     loop.run_until_complete(server.serve())
+
+from fastapi.responses import FileResponse
+
+@app.get('/download_processed_video')
+async def download_processed_video():
+    # Replace 'processed_video.mp4' with the actual path to the processed video file
+    file_path = "processed_video.mp4"
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Processed video not found.")
+
+    return FileResponse(file_path, media_type="video/mp4", filename="processed_video.mp4")
