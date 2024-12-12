@@ -1,5 +1,6 @@
 import base64
 import sys
+import sys
 import cv2
 import google.generativeai as genai
 gemini_model = genai.GenerativeModel(model_name = "gemini-1.5-flash")

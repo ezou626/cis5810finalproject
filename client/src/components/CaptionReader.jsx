@@ -15,6 +15,7 @@ const CaptionReader = ({ streamUrl }) => {
 
     eventSource.onopen = () => {
       setMessage('');
+      setMessage('');
       console.log('EventSource connected');
     }
 
