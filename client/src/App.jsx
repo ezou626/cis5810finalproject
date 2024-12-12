@@ -9,6 +9,7 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
   const [firstPage, setFirstPage] = useState(true);
+  const [imgKey, setImgKey] = useState(0);
 
   const streamUrl = isStreaming ? videoUrl : "";
 
@@ -19,6 +20,7 @@ export default function App() {
     }
     setError("");
     setIsStreaming(true);
+    setImgKey((prevKey) => prevKey + 1);
   };
 
   const stopStreaming = () => {
@@ -95,9 +97,8 @@ export default function App() {
 
           <div className="flex flex-col md:flex-row gap-12">
             <VideoStreamer
+              imgKey={imgKey}
               streamUrl={streamUrl}
-              startStreaming={startStreaming}
-              stopStreaming={stopStreaming}
             />
             <CaptionReader streamUrl={streamUrl} />
           </div>

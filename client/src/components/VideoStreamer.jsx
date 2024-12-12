@@ -1,8 +1,9 @@
 import React from "react";
 
-const VideoStreamer = ({ streamUrl }) => {
+const VideoStreamer = ({ streamUrl, imgKey }) => {
+
   const modifiedStreamUrl = streamUrl
-    ? `http://localhost:8000/play_video_mod?url=${encodeURIComponent(streamUrl)}`
+    ? `http://localhost:8000/play_video_mod?url=${encodeURIComponent(streamUrl)}&time=${imgKey}`
     : null;
 
   return (
@@ -12,6 +13,7 @@ const VideoStreamer = ({ streamUrl }) => {
       <div className="w-full">
         {modifiedStreamUrl ? (
           <img
+            key={imgKey}
             src={modifiedStreamUrl}
             alt="Processed Stream"
             className="w-full rounded-lg bg-black shadow-md"
