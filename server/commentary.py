@@ -1,6 +1,7 @@
 import base64
 import asyncio
 import sys
+import sys
 import cv2
 import google.generativeai as genai
 gemini_model = genai.GenerativeModel(model_name = "gemini-1.5-flash")
@@ -30,7 +31,7 @@ async def batch_frames(frames, batch_size, framerate):
         yield batch
 
 async def caption_images_with_gemini(images, width: int, height: int, captions_list: list[str]):
-    instruction = "Describe the sequence occuring the in these images in a single detailed sentence. Do not include any other words in your response besides the sentence."
+    instruction = "Describe the sequence occuring the in these images in a single detailed sentence as if you are Stephen A Smith. Do not include any other words in your response besides the sentence."
     prompt = [
         {
             'mime_type':'image/jpeg', 

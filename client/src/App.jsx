@@ -36,7 +36,7 @@ export default function App() {
       {/* Header Section */}
       <header className="py-16 text-center bg-gray-800">
         <h1 className="text-5xl md:text-6xl font-extrabold leading-tight">
-          ZoomBot AI
+          Stephen AI Smith
         </h1>
       </header>
 
