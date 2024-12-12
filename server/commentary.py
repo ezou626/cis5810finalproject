@@ -1,4 +1,5 @@
 import base64
+import sys
 import cv2
 import google.generativeai as genai
 gemini_model = genai.GenerativeModel(model_name = "gemini-1.5-flash")
@@ -22,8 +23,8 @@ def batch_frames(frames, batch_size, framerate):
     if batch:
         yield batch
 
-async def caption_images_with_gemini(images, width: int, height: int):
-    instruction = "Describe the sequence occuring the in these images in a single detailed sentence. Do not include any other words in your response besides the sentence."
+async def caption_images_with_gemini(images, width: int, height: int, captions_list: list[str]):
+    instruction = "Describe the sequence occuring the in these images in a single detailed sentence as if you are Stephen A Smith. Do not include any other words in your response besides the sentence."
     prompt = [
         {
             'mime_type':'image/jpeg', 
@@ -33,11 +34,16 @@ async def caption_images_with_gemini(images, width: int, height: int):
                     )[1]).decode()
         } for image in images
     ]
+    if captions_list:
+        prompt.append("These captions provide context for the image. Try to add new details and don't repeat any information.")
+        for caption in captions_list:
+            prompt.append(caption)
     prompt.append(instruction)
     response = await gemini_model.generate_content_async(prompt)
-    return response.text.strip()
+    print('\n\n\n\n\n\n\n CAPTION RESPONSE:', response.text, file=sys.stderr)
+    return response.text.replace('\n', ' ').replace('\r', '')
 
-async def get_caption_for_batch(images, width: int, height: int):
+async def get_caption_for_batch(images, width: int, height: int, captions_list: list[str]):
     """
     Generate caption for a batch of images
 
@@ -47,4 +53,4 @@ async def get_caption_for_batch(images, width: int, height: int):
     Returns:
         list[str]: A list of generated captions.
     """
-    return await caption_images_with_gemini(images, width, height)
+    return await caption_images_with_gemini(images, width, height, captions_list)

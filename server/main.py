@@ -1,5 +1,6 @@
 import asyncio
 import io
+import sys
 import time
 from uvicorn import Server, Config
 from fastapi import FastAPI, HTTPException
@@ -38,7 +39,7 @@ yolo_model = None  # YOLO model placeholder
 def load_model():
     global yolo_model
     try:
-        yolo_model = YOLO("yolov5s.pt")  # Load pre-trained YOLOv5 model
+        yolo_model = YOLO("yolov5s.pt", verbose=False)  # Load pre-trained YOLOv5 model
         print("YOLO model loaded successfully!")
     except Exception as e:
         print(f"Error loading YOLO model: {e}")
@@ -180,7 +181,7 @@ async def play_video_mod(url: str):
 
     return StreamingResponse(process_video(), media_type="multipart/x-mixed-replace; boundary=frame")
 
-ANALYSIS_WINDOW = 10  # seconds
+ANALYSIS_WINDOW = 5  # seconds
 
 @app.get('/captions')
 async def get_captions(video_url: str):
@@ -192,16 +193,18 @@ async def get_captions(video_url: str):
         height = int(height * scale)
 
     async def caption_stream():
+        captions = []
         try:
             frames = extract_frames(video_url)
             for frame_batch in batch_frames(frames, batch_size=ANALYSIS_WINDOW, framerate=framerate):
                 start = time.time()
-                caption = await get_caption_for_batch(frame_batch, width, height)
+                caption = await get_caption_for_batch(frame_batch, width, height, captions)
                 end = time.time()
                 yield f"data: {caption}\n\n"
+                captions.append(caption)
                 await asyncio.sleep(max(0, ANALYSIS_WINDOW - (end - start)))
         except Exception as e:
-            print(f"Error during caption generation: {e}")
+            print(f"Error during caption generation: {e}", file=sys.stderr)
             yield f"data: Error: {str(e)}\n\n"
 
     return StreamingResponse(caption_stream(), media_type="text/event-stream")

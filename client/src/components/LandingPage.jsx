@@ -4,39 +4,46 @@ const LandingPage = ({ onGetStarted }) => {
   return (
     <div className="bg-gray-900 text-white min-h-screen">
       {/* Hero Section */}
-      <header className="relative">
-        <div className="max-w-7xl mx-auto px-6 py-16 text-center">
-          <h1 className="text-5xl md:text-6xl font-extrabold leading-tight">
-            ZoomBot AI
-          </h1>
-          <p className="mt-6 text-xl md:text-2xl text-gray-300">
-            The Ultimate AI-Powered Video Commentator and Auto-Zooming Experience. 
-            <br /> Dive into Precision Tracking and Real-Time Commentary.
-          </p>
-          <div className="mt-8 flex justify-center space-x-4">
-            <a 
-              href="#features" 
-              onClick={onGetStarted}
-              className="bg-indigo-600 hover:bg-indigo-700 px-8 py-4 text-lg font-bold rounded-md shadow-md"
-            >
-              Explore Features
-            </a>
-            <button 
-              onClick={onGetStarted}
-              className="bg-green-600 hover:bg-green-700 px-8 py-4 text-lg font-bold rounded-md shadow-md"
-            >
-              Get Started
-            </button>
-          </div>
-        </div>
-
-        
-      </header>
+  <header className="relative">
+  <div className="max-w-7xl mx-auto px-6 py-16 text-center">
+    <div className="flex items-center justify-center space-x-4">
+      {/* Stephen A. Smith Image */}
+      <img 
+        src="/stephen.png" 
+        alt="Stephen A. Smith" 
+        className="w-28 h-24 rounded-full shadow-lg"
+      />
+      {/* Title */}
+      <h1 className="text-5xl md:text-6xl font-extrabold leading-tight">
+        Stephen AI Smith
+      </h1>
+    </div>
+    <p className="mt-6 text-xl md:text-2xl text-gray-300">
+      The Ultimate AI-Powered Video Commentator and Auto-Zooming Experience. 
+      <br /> Dive into Precision Tracking and Real-Time Commentary.
+    </p>
+    <div className="mt-8 flex justify-center space-x-4">
+      <a 
+        href="#features" 
+        onClick={onGetStarted}
+        className="bg-indigo-600 hover:bg-indigo-700 px-8 py-4 text-lg font-bold rounded-md shadow-md"
+      >
+        Explore Features
+      </a>
+      <button 
+        onClick={onGetStarted}
+        className="bg-green-600 hover:bg-green-700 px-8 py-4 text-lg font-bold rounded-md shadow-md"
+      >
+        Get Started
+      </button>
+    </div>
+  </div>
+</header>
 
       {/* Features Section */}
       <section id="features" className="py-24 bg-gray-800">
         <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-4xl font-bold text-center mb-12">Why Use ZoomBot AI?</h2>
+          <h2 className="text-4xl font-bold text-center mb-12">Why Use Stephen AI Smith?</h2>
           <div className="grid md:grid-cols-3 gap-12">
             <Feature 
               icon="🚀"
@@ -84,7 +91,7 @@ const LandingPage = ({ onGetStarted }) => {
       {/* Call to Action */}
       <section className="py-16 bg-indigo-600">
         <div className="max-w-7xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-bold mb-6 text-white">Get Started with ZoomBot AI Today</h2>
+          <h2 className="text-4xl font-bold mb-6 text-white">Get Started with Stephen AI Smith Today</h2>
           <a 
             href="#"
             className="bg-gray-900 hover:bg-gray-800 px-8 py-4 text-lg font-bold rounded-md shadow-md text-white"
@@ -98,7 +105,7 @@ const LandingPage = ({ onGetStarted }) => {
       <footer className="bg-gray-900 py-6">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-gray-400">
-            &copy; 2024 ZoomBot AI. All Rights Reserved.
+            &copy; 2024 Stephen AI Smith. All Rights Reserved.
           </p>
         </div>
       </footer>
