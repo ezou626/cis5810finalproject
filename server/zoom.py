@@ -4,7 +4,7 @@ import os
 import cv2
 import numpy as np
 
-async def get_image_zoom_box(frame):
+async def get_image_zoom_box_net(frame):
     # Define the URL and headers
     url = "https://predict.ultralytics.com"
     headers = {"x-api-key": os.environ.get("U_API_KEY")}
@@ -37,3 +37,74 @@ async def get_image_zoom_box(frame):
         
         # Extract points
     return x1, y1, x2, y2
+
+def get_image_zoom_box(frame, width, height, yolo_model):
+    results = yolo_model(frame)
+
+    detections = []
+    for r in results[0].boxes:
+        box = r.xyxy.numpy().tolist()[0]  # Bounding box in [x1, y1, x2, y2]
+        conf = r.conf.item()  # Confidence score
+        cls = r.cls.item()  # Class ID
+        
+        # Only include high-confidence "person" detections
+        if conf > 0.5 and cls == 0:
+            area = (box[2] - box[0]) * (box[3] - box[1])
+            detections.append({
+                "box": box, 
+                "conf": conf, 
+                "class": cls,
+                "conf_area": conf * area
+            })
+
+    if not detections:
+        return (0, 0, width, height)
+    
+    # Get top 5 by confidence * area
+    best_detections = sorted(detections, key=lambda d: d["conf_area"], reverse=True)[:5]
+
+    # Find the smallest box that includes all detected boxes
+    x1 = int(min(d["box"][0] for d in best_detections))
+    y1 = int(min(d["box"][1] for d in best_detections))
+    x2 = int(max(d["box"][2] for d in best_detections))
+    y2 = int(max(d["box"][3] for d in best_detections))
+
+    # Calculate the bounding box dimensions
+    box_width = x2 - x1
+    box_height = y2 - y1
+    original_aspect_ratio = width / height
+
+    # Determine the size of the sliding frame (scaled as large as possible)
+    if box_width / box_height > original_aspect_ratio:
+        # Wider than original aspect ratio: fit width
+        frame_width = box_width
+        frame_height = int(box_width / original_aspect_ratio)
+    else:
+        # Taller than original aspect ratio: fit height
+        frame_height = box_height
+        frame_width = int(box_height * original_aspect_ratio)
+
+    # Ensure the frame fits within the image bounds
+    frame_width = min(frame_width, width)
+    frame_height = min(frame_height, height)
+
+    # Center the frame on the combined bounding box
+    center_x = x1 + box_width // 2
+    center_y = y1 + box_height // 2
+    frame_x1 = max(0, center_x - frame_width // 2)
+    frame_y1 = max(0, center_y - frame_height // 2)
+    frame_x2 = min(width, frame_x1 + frame_width)
+    frame_y2 = min(height, frame_y1 + frame_height)
+
+    # Ensure the frame remains within bounds
+    frame_x1 = max(0, frame_x2 - frame_width)
+    frame_y1 = max(0, frame_y2 - frame_height)
+
+    return frame_x1, frame_y1, frame_x2, frame_y2
+
+def get_zoomed_frame(frame, width, height, x1, y1, x2, y2):
+    # Define the zoomed frame
+    zoomed_frame = frame[y1:y2, x1:x2]
+    zoomed_frame = cv2.resize(zoomed_frame, (width, height))
+    _, buffer = cv2.imencode('.jpeg', zoomed_frame)
+    return buffer.tobytes()

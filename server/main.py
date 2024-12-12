@@ -8,19 +8,25 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import cv2
-import numpy as np
 from dotenv import load_dotenv
-from ultralytics import YOLO
-from pydantic import BaseModel
-from commentary import extract_frames, batch_frames, get_caption_for_batch
+from commentary import extract_frames, batch_frames, caption_images_with_gemini
 import google.generativeai as genai
+from contextlib import asynccontextmanager
+from models import setup_models, get_yolo_model
+from zoom import get_image_zoom_box, get_zoomed_frame
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-# Load environment variables
-load_dotenv('.env', override=True)
-genai.configure(api_key=os.environ.get('G_API_KEY'))
+yolo_pool = ProcessPoolExecutor(max_workers=4)
+transform_pool = ProcessPoolExecutor(max_workers=2)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_dotenv('.env', override=True)
+    setup_models()
+    yield
 
 # FastAPI app setup
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # CORS middleware
 app.add_middleware(
@@ -31,69 +37,50 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Global variables
-user_selected_box = None  # Store the user-defined bounding box
-yolo_model = None  # YOLO model placeholder
-
-# Load YOLO model
-def load_model():
-    global yolo_model
-    try:
-        yolo_model = YOLO("yolov5s.pt", verbose=False)  # Load pre-trained YOLOv5 model
-        print("YOLO model loaded successfully!")
-    except Exception as e:
-        print(f"Error loading YOLO model: {e}")
-        yolo_model = None
-
-@app.on_event("startup")
-def startup_event():
-    load_model()
+ANALYSIS_WINDOW = 5  # seconds
 
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
 
-class BoundingBox(BaseModel):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
-
-@app.post('/set_tracking_box')
-def set_tracking_box(box: BoundingBox):
-    """Set the bounding box to track."""
-    global user_selected_box
-    user_selected_box = box.dict()
-    return {"message": "Tracking box set successfully"}
-
-@app.get('/get_first_frame')
-async def get_first_frame(url: str):
-    """Extract and serve the first frame of the video."""
-    try:
-        cap = cv2.VideoCapture(url)
-        ret, frame = cap.read()
-        cap.release()
-
-        if not ret or frame is None:
-            raise HTTPException(status_code=400, detail="Unable to read the first frame. Check the video URL.")
-
-        _, buffer = cv2.imencode('.jpeg', frame)
-        return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
-    except Exception as e:
-        print(f"Error extracting first frame: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get('/play_video_mod')
-async def play_video_mod(url: str):
+async def play_video_mod(url: str, time: int):
     """
     Streams video content from a given URL with YOLO object detection and auto-zoom.
     Maintains aspect ratio and frame size.
     """
+
+    yolo_model = get_yolo_model()
+    task_queue = asyncio.Queue(maxsize=10)
+    box_queue = asyncio.Queue(maxsize=10)
+
+    async def worker():
+        while True:
+            if not box_queue.empty():
+                await asyncio.sleep(0.1)
+                continue
+            if task_queue.empty():
+                await asyncio.sleep(0.1)
+                continue
+            try:
+                task = task_queue.get_nowait()
+                result = await task
+                box_queue.put_nowait(result)
+            except Exception as e:
+                print(f"Error processing frame: {e}", file=sys.stderr)
+            await asyncio.sleep(0.5)
+
+    workers = [asyncio.create_task(worker()) for _ in range(1)]
+
     async def process_video():
         cap = cv2.VideoCapture(url)
         framerate = round(cap.get(cv2.CAP_PROP_FPS))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        loop = asyncio.get_event_loop()
+        index = -1
+        current_box = (0, 0, width, height)
 
         try:
             while True:
@@ -101,91 +88,42 @@ async def play_video_mod(url: str):
                 if not ret:
                     break
 
-                # Run YOLO detection
-                results = yolo_model(frame)
+                index += 1
+                index %= framerate
+                
+                if index == 0:
+                    # submit this frame for processing
+                    try:
+                        task_queue.put_nowait(
+                            loop.run_in_executor(
+                                yolo_pool, get_image_zoom_box, frame, width, height, yolo_model
+                            )
+                        )
+                    except asyncio.QueueFull as e:
+                        print(f"Queue is full: {e}", file=sys.stderr)
 
-                # Parse detections
-                detections = []
-                for r in results[0].boxes:
-                    box = r.xyxy.numpy().tolist()[0]  # Bounding box in [x1, y1, x2, y2]
-                    conf = r.conf.item()  # Confidence score
-                    cls = r.cls.item()  # Class ID
-                    if conf > 0.5 and cls == 0:  # Only include high-confidence "person" detections
-                        detections.append({"box": box, "conf": conf, "class": cls})
-                ################################################################################################
-                #MATH IS HERE
-                ################################################################################################
-                if detections:
-                    # Select the largest object for zooming
-                    largest_detection = max(detections, key=lambda d: (d["box"][2] - d["box"][0]) * (d["box"][3] - d["box"][1]))
-                    x1, y1, x2, y2 = map(int, largest_detection["box"])
-
-                    # Calculate the bounding box dimensions
-                    box_width = x2 - x1
-                    box_height = y2 - y1
-                    original_aspect_ratio = width / height
-
-                    # Determine the size of the sliding frame (scaled as large as possible)
-                    if box_width / box_height > original_aspect_ratio:
-                        # Wider than original aspect ratio: fit width
-                        frame_width = box_width
-                        frame_height = int(box_width / original_aspect_ratio)
-                    else:
-                        # Taller than original aspect ratio: fit height
-                        frame_height = box_height
-                        frame_width = int(box_height * original_aspect_ratio)
-
-                    # Ensure the frame fits within the image bounds
-                    frame_width = min(frame_width, width)
-                    frame_height = min(frame_height, height)
-
-                    # Center the frame on the bounding box
-                    center_x = x1 + box_width // 2
-                    center_y = y1 + box_height // 2
-                    frame_x1 = max(0, center_x - frame_width // 2)
-                    frame_y1 = max(0, center_y - frame_height // 2)
-                    frame_x2 = min(width, frame_x1 + frame_width)
-                    frame_y2 = min(height, frame_y1 + frame_height)
-
-                    # Ensure the frame remains within bounds
-                    frame_x1 = max(0, frame_x2 - frame_width)
-                    frame_y1 = max(0, frame_y2 - frame_height)
-
-                    # Extract the content within the frame
-                    sliding_frame = frame[frame_y1:frame_y2, frame_x1:frame_x2]
-
-                    # Resize the sliding frame to the screen size
-                    zoomed_frame = cv2.resize(sliding_frame, (width, height))
-
-                ################################################################################################################################
-                ################################################################################################################################
-
-                    # Encode and yield the frame
-                    _, buffer = cv2.imencode('.jpeg', zoomed_frame)
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' +
-                           buffer.tobytes() + b'\r\n')
-                else:
-                    # No detections, yield the original frame
-                    _, buffer = cv2.imencode('.jpeg', frame)
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' +
-                           buffer.tobytes() + b'\r\n')
-
-                await asyncio.sleep(1 / framerate)
+                # get the next box if available
+                while not box_queue.empty():
+                    current_box = box_queue.get_nowait()
+                    
+                img_bytes = await loop.run_in_executor(transform_pool, get_zoomed_frame, frame, width, height, *current_box)
+                yield (b'--frame\r\n'
+                        b'Content-Type: image/jpeg\r\n\r\n' +
+                        img_bytes + b'\r\n')
 
         except Exception as e:
-            print(f"Error during video processing: {e}")
+            print(f"Error during video processing: {e}", file=sys.stderr)
         finally:
             cap.release()
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
 
     return StreamingResponse(process_video(), media_type="multipart/x-mixed-replace; boundary=frame")
 
-ANALYSIS_WINDOW = 5  # seconds
-
 @app.get('/captions')
 async def get_captions(video_url: str):
-    """Extract frames and generate captions using BLIP."""
+    """Extract frames and generate captions."""
     framerate, width, height = get_video_metadata(video_url)
     if width * height > 480 * 480:
         scale = (480 * 480) / (width * height)
@@ -196,13 +134,14 @@ async def get_captions(video_url: str):
         captions = []
         try:
             frames = extract_frames(video_url)
-            for frame_batch in batch_frames(frames, batch_size=ANALYSIS_WINDOW, framerate=framerate):
+            async for frame_batch in batch_frames(frames, batch_size=ANALYSIS_WINDOW, framerate=framerate):
+                print('got a batch', file=sys.stderr)
                 start = time.time()
-                caption = await get_caption_for_batch(frame_batch, width, height, captions)
+                caption = await caption_images_with_gemini(frame_batch, width, height, captions)
+                captions.append(caption)
                 end = time.time()
                 yield f"data: {caption}\n\n"
-                captions.append(caption)
-                await asyncio.sleep(max(0, ANALYSIS_WINDOW - (end - start)))
+                # await asyncio.sleep(max(0, ANALYSIS_WINDOW - (end - start)))
         except Exception as e:
             print(f"Error during caption generation: {e}", file=sys.stderr)
             yield f"data: Error: {str(e)}\n\n"

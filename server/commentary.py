@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import sys
 import cv2
 import google.generativeai as genai
@@ -12,14 +13,19 @@ def extract_frames(video_url):
         success, frame = video_capture.read()
     video_capture.release()
 
-def batch_frames(frames, batch_size, framerate):
+async def batch_frames(frames, batch_size, framerate):
     batch = []
-    for i, frame in enumerate(frames):
-        if i % framerate == 0:
-            batch.append(frame)
-            if len(batch) == batch_size:
-                yield batch
-                batch = []
+    i = 0
+    for frame in frames:
+        i += 1
+        if i % framerate:
+            continue
+        i = 0
+        batch.append(frame)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+        await asyncio.sleep(1)
     if batch:
         yield batch
 
