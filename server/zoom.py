@@ -47,7 +47,7 @@ def get_image_zoom_box(frame, width, height, yolo_model):
         conf = r.conf.item()  # Confidence score
         cls = r.cls.item()  # Class ID
         
-        if conf > 0.3 and cls == 0:
+        if conf > 0.4 and cls == 0:
             area = (box[2] - box[0]) * (box[3] - box[1])
             detections.append({
                 "box": box, 
