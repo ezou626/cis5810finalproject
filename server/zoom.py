@@ -47,21 +47,30 @@ def get_image_zoom_box(frame, width, height, yolo_model):
         conf = r.conf.item()  # Confidence score
         cls = r.cls.item()  # Class ID
         
-        # Only include high-confidence "person" detections
-        if conf > 0.5 and cls == 0:
+        if conf > 0.3 and cls == 0:
             area = (box[2] - box[0]) * (box[3] - box[1])
             detections.append({
                 "box": box, 
                 "conf": conf, 
                 "class": cls,
+                "area": area,
                 "conf_area": conf * area
             })
 
     if not detections:
         return (0, 0, width, height)
     
-    # Get top 5 by confidence * area
-    best_detections = sorted(detections, key=lambda d: d["conf_area"], reverse=True)[:5]
+    # # Get top 5 closest to centroid of bounding boxes
+    # # get mean of bounding boxes
+    # cx, cy = sum(d["box"][i] for d in detections for i in (0, 2)) / (2 * len(detections)), sum(d["box"][i] for d in detections for i in (1, 3)) / (2 * len(detections))
+    # best_detections = sorted(detections, key=lambda d: (d["box"][0] + d["box"][2] - 2 * cx) ** 2 + (d["box"][1] + d["box"][3] - 2 * cy) ** 2)[:5]
+    
+    # # Get top 5 by confidence * area
+    # best_detections = sorted(detections, key=lambda d: d["conf_area"], reverse=True)[:5]
+
+    # Get top 5 by closeness to median
+    cx, cy = np.median([d["box"][0] + d["box"][2] for d in detections]) / 2, np.median([d["box"][1] + d["box"][3] for d in detections]) / 2
+    best_detections = sorted(detections, key=lambda d: (d["box"][0] + d["box"][2] - 2 * cx) ** 2 + (d["box"][1] + d["box"][3] - 2 * cy) ** 2)[:len(detections) // 2]
 
     # Find the smallest box that includes all detected boxes
     x1 = int(min(d["box"][0] for d in best_detections))
@@ -95,10 +104,16 @@ def get_image_zoom_box(frame, width, height, yolo_model):
     frame_y1 = max(0, center_y - frame_height // 2)
     frame_x2 = min(width, frame_x1 + frame_width)
     frame_y2 = min(height, frame_y1 + frame_height)
-
-    # Ensure the frame remains within bounds
     frame_x1 = max(0, frame_x2 - frame_width)
     frame_y1 = max(0, frame_y2 - frame_height)
+
+    # Add a 10% buffer zone
+    buffer_x = int(0.1 * (frame_x2 - frame_x1))
+    buffer_y = int(0.1 * (frame_y2 - frame_y1))
+    frame_x1 = max(0, frame_x1 - buffer_x)
+    frame_y1 = max(0, frame_y1 - buffer_y)
+    frame_x2 = min(width, frame_x2 + buffer_x)
+    frame_y2 = min(height, frame_y2 + buffer_y)
 
     return frame_x1, frame_y1, frame_x2, frame_y2
 

@@ -6,7 +6,7 @@ _yolo_model = None
 _google_client = None
 
 def load_google_client():
-    genai.configure(api_key=os.environ.get('G_API_KEY'))
+    genai.configure(api_key=os.environ.get('GOOGLE_API_KEY'))
     global _google_client
     _google_client = genai.GenerativeModel(model_name="gemini-1.5-flash")
 
@@ -18,6 +18,7 @@ def setup_models():
     load_google_client()
     load_yolo_model()
     print('models loaded successfully!')
+    print(_google_client)
 
 def get_yolo_model():
     return _yolo_model

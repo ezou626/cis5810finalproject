@@ -3,7 +3,7 @@ import React from "react";
 const VideoStreamer = ({ streamUrl, imgKey }) => {
 
   const modifiedStreamUrl = streamUrl
-    ? `http://localhost:8000/play_video_mod?url=${encodeURIComponent(streamUrl)}&time=${imgKey}`
+    ? `http://localhost:8000/play_video_mod?url=${encodeURIComponent(streamUrl)}&imgKey=${imgKey}`
     : null;
 
   return (

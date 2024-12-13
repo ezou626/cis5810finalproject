@@ -65,7 +65,7 @@ export default function App() {
           </div>
 
           <div className="mt-8 flex justify-center space-x-4">
-            <button
+            {!isStreaming ? <button
               onClick={startStreaming}
               className={`px-8 py-4 text-lg font-bold rounded-md shadow-md transition ${
                 streamUrl 
@@ -75,7 +75,7 @@ export default function App() {
               disabled={!!streamUrl}
             >
               Start Streaming
-            </button>
+            </button> :
             <button
               onClick={stopStreaming}
               className={`px-8 py-4 text-lg font-bold rounded-md shadow-md transition ${
@@ -86,7 +86,7 @@ export default function App() {
               disabled={!streamUrl}
             >
               Stop Streaming
-            </button>
+            </button>}
           </div>
         </div>
       </section>
