@@ -70,7 +70,7 @@ def get_image_zoom_box(frame, width, height, yolo_model):
 
     # Get top 5 by closeness to median
     cx, cy = np.median([d["box"][0] + d["box"][2] for d in detections]) / 2, np.median([d["box"][1] + d["box"][3] for d in detections]) / 2
-    best_detections = sorted(detections, key=lambda d: (d["box"][0] + d["box"][2] - 2 * cx) ** 2 + (d["box"][1] + d["box"][3] - 2 * cy) ** 2)[:len(detections) // 2]
+    best_detections = sorted(detections, key=lambda d: (d["box"][0] + d["box"][2] - 2 * cx) ** 2 + (d["box"][1] + d["box"][3] - 2 * cy) ** 2)[:max(len(detections) // 2, 1)]
 
     # Find the smallest box that includes all detected boxes
     x1 = int(min(d["box"][0] for d in best_detections))
